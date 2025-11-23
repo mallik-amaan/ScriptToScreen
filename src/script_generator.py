@@ -21,13 +21,15 @@ def setup_genai(api_key: str = None):
 # ----------------------------
 # 2️⃣ LLM CALL
 # ----------------------------
-def call_llm(prompt: str, model: str = "gemini-2.5-flash", max_tokens: int = 600) -> str:
+def call_llm(prompt: str, model: str = "gemini-2.5-pro", max_tokens: int = 600) -> str:
     """
     Call the Gemini model and return generated text.
     """
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
+        model_instance = genai.GenerativeModel(model)
+        response = model_instance.generate_content(prompt)
+        print("-----------Model responding for prompt ------------------")
+        print(response.text)
         return response.text
     except Exception as e:
         raise RuntimeError(f"Error calling Gemini model: {e}")
@@ -38,50 +40,43 @@ def call_llm(prompt: str, model: str = "gemini-2.5-flash", max_tokens: int = 600
 # ----------------------------
 def generate_script(title: str, description: str, model: str = "gemini-2.5-flash") -> dict:
     """
-    Generate a structured explainer script from title + description.
-
+    Generate a smooth 2-minute explainer script from title + description.
     Returns a dict:
     {
         "title": str,
-        "hook": str,
-        "segments": [{"heading": str, "content": str, "diagram": str}],
-        "cta": str
+        "script": str
     }
     """
     prompt = f"""
-    Generate a structured 3-minute explainer script for a video.
+You are a professional script writer.  
 
-    Title: {title}
-    Description: {description}
+Write a **smooth, engaging, and continuous 2-minute video script** that explains the following topic naturally, as if a narrator is speaking.  
+Do **not** divide into segments, bullet points, or slides. Make it flow like a real video narration.
 
-    Output format (JSON):
-    {{
-        "title": "...",
-        "hook": "...",
-        "segments": [
-            {{"heading": "...", "content": "...", "diagram": "..."}}
-        ],
-        "cta": "..."
-    }}
+Title: {title}  
+Description: {description}
 
-    Keep it concise and clear for slides + narration. Output valid JSON only.
-    """
+Output **strictly as JSON**, nothing else:
+{{
+  "title": "{title}",
+  "script": "..."
+}}
+"""
 
-    llm_output = call_llm(prompt, model=model)
+    llm_output = call_llm(prompt, model=model, max_tokens=700)
 
-    # Try parsing JSON from LLM output
+    # Attempt to extract JSON from the model output
     try:
-        script = json.loads(llm_output)
-    except json.JSONDecodeError:
-        # fallback dummy structure if LLM output is not valid JSON
+        start = llm_output.index("{")
+        end = llm_output.rindex("}") + 1
+        json_str = llm_output[start:end]
+        script = json.loads(json_str)
+    except Exception:
+        # Fallback
         script = {
             "title": title,
-            "hook": f"Hook for: {title}",
-            "segments": [
-                {"heading": "Segment 1", "content": description, "diagram": "chart1"},
-                {"heading": "Segment 2", "content": "Explain details here", "diagram": "chart2"},
-            ],
-            "cta": "Subscribe for more!"
+            "script": f"{description}. This video explains the topic in a smooth, engaging narration."
         }
 
     return script
+
