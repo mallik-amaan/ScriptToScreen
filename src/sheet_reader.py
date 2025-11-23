@@ -2,23 +2,20 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 import os
+import json
 
 
 def _get_credentials():
-    """Load Google service account credentials."""
-    scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-    creds_path = os.getenv("CREDENTIALS_PATH")
+    creds_json = os.getenv("JSON")
+    if not creds_json:
+        raise ValueError("No JSON credentials found in environment variable 'JSON'")
 
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(
-            f"Service account file not found at {creds_path}. "
-            "Make sure you added it in config/"
-        )
-
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        creds_path, scope
+    credentials_dict = json.loads(creds_json)
+    credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+        credentials_dict,
+        scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
     )
-    return creds
+    return credentials
 
 
 def _get_worksheet(sheet_id: str, sheet_name: str):
