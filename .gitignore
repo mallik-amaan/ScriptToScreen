@@ -100,6 +100,8 @@ docs/_build/
 .env.local
 !.env.example
 credentials/*
+output/*
+narration/*
 # OS files
 .DS_Store
 Thumbs.db
