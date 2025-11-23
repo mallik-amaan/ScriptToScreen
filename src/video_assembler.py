@@ -36,51 +36,39 @@ def text_image_clip(title: str, body: str, duration: float = 25, bg_color=(30,30
     bw, bh = bb[2]-bb[0], bb[3]-bb[1]
     draw.multiline_text(((VIDEO_W-bw)//2, int(VIDEO_H*0.5)), wrapped, font=body_font, fill="lightgrey", align="center")
 
-    clip = ImageClip(np.array(img)).set_duration(duration)
+    clip = ImageClip(np.array(img)).with_duration(duration)
     return clip
 
-def build_video(title: str, description: str, out_path: str = "output.mp4", max_duration: float = 180):
+def build_video(title: str, description: str, out_path: str = "output.mp4", max_duration: float = 180) -> str:
     """
-    Build a video from a script (title + description) and yield progress updates.
-    Yields:
-        ("stage", progress) -> stage: "script", "audio", "video", progress: 0-100
+    Build a video from a script (title + description).
     """
-    # ===== Step 1: Prepare text =====
-    yield ("script", 10)
     sentences = [s.strip() for s in description.split(".") if s.strip()]
     if len(sentences) < 7:
         while len(sentences) < 7:
             sentences.append(sentences[-1] if sentences else "Insight.")
 
-    # ===== Step 2: Generate narration =====
-    narr_path = f"narration/temp_narration.mp3"
-    for prog in generate_narration(description, narr_path):
-        yield ("audio", prog)
-    narr_audio = AudioFileClip(narr_path)
-    yield ("audio", 100)
+    narr_audio_path = generate_narration(" ".join(sentences), "narration/narration_full.mp3")
+    narr_audio = AudioFileClip(narr_audio_path)
 
-    # ===== Step 3: Build video clips =====
-    total_clips = 7
-    per_seg = min(narr_audio.duration / total_clips, max_duration / total_clips)
+    total_duration = min(narr_audio.duration, max_duration)
+    per_seg = total_duration / 7
+
     clips = []
-    segment_titles = ["Hook", "Intro", "Details", "Examples", "Benefits", "Challenges", "Future"]
     current_t = 0.0
+    segment_titles = ["Hook", "Intro", "Details", "Examples", "Benefits", "Challenges", "Future"]
 
-    for idx in range(total_clips):
+    for i in range(7):
         seg_dur = min(per_seg, narr_audio.duration - current_t)
         if seg_dur <= 0:
             break
-        scene = text_image_clip(segment_titles[idx], sentences[idx], seg_dur)
-        a_sub = narr_audio.subclip(current_t, current_t + seg_dur)
-        scene = scene.set_audio(a_sub)
+        scene = text_image_clip(segment_titles[i], sentences[i], seg_dur)
+        a_sub = narr_audio.subclipped(current_t, current_t + seg_dur)
+        scene = scene.with_audio(a_sub)
         clips.append(scene)
         current_t += seg_dur
-        yield ("video", int(((idx+1)/total_clips)*100))
 
-    # ===== Step 4: Concatenate clips and export =====
     final = concatenate_videoclips(clips, method="compose")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    final.write_videofile(out_path, fps=FPS, codec="libx264", audio_codec="aac", verbose=False, logger=None)
-    yield ("video", 100)
-
+    final.write_videofile(out_path, fps=FPS, codec="libx264", audio_codec="aac")
     return out_path

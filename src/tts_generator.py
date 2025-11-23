@@ -1,25 +1,22 @@
 # src/tts_generator.py
 from gtts import gTTS
-import os
-import tempfile
+import time
 
-def generate_narration(text: str, out_path: str):
-    """
-    Generates TTS audio and returns path. Yields progress percentage for Streamlit.
-    """
-    # Split text into chunks for progress tracking
-    sentences = text.split(". ")
-    total = len(sentences)
-    
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-        temp_path = tmp_file.name
-    
-    for idx, sentence in enumerate(sentences, 1):
-        tts = gTTS(sentence)
-        tmp_audio = f"{temp_path}_{idx}.mp3"
-        tts.save(tmp_audio)
-        # Append to final file
-        os.system(f'ffmpeg -y -i "concat:{tmp_audio}" -acodec copy "{out_path}"')
-        progress = int((idx / total) * 100)
-        yield progress  # Streamlit can update progress bar
+
+def generate_narration(text, out_path):
+    print("Generating single-shot TTS...")
+
+    retries = 3
+    while retries > 0:
+        try:
+            tts = gTTS(text=text, lang="en")
+            tts.save(out_path)
+            print(f"Audio saved to {out_path}")
+            return out_path
+
+        except Exception as e:
+            print(f"TTS failed: {e}")
+            retries -= 1
+            time.sleep(1)
+
+    raise RuntimeError("❌ Failed to generate narration after multiple retries.")

@@ -1,29 +1,35 @@
-# app.py
+# main.py
 import streamlit as st
 import os
+import time
+import traceback
 from urllib.parse import urlparse, parse_qs
+
 from src.sheet_reader import read_sheet
 from src.script_generator import generate_script, setup_genai
 from src.tts_generator import generate_narration
 from src.video_assembler import build_video
 
-# ===== Streamlit Page Config =====
-st.set_page_config(page_title="Script2Screen", layout="wide", page_icon="🎬")
 
-st.markdown("<h1 style='text-align: center; color: #4B0082;'>🎬 Script2Screen: Google Sheets to Video</h1>", unsafe_allow_html=True)
-st.markdown("<h4 style='text-align: center; color: #4B0082;'>Enter your Google Sheet URL and generate videos step by step</h4>", unsafe_allow_html=True)
-st.write("---")
+st.set_page_config(page_title="Script2Screen", layout="wide")
 
-# ===== Input Google Sheet URL =====
+st.markdown("<h1 style='text-align: center; color: #4B0082;'>Script2Screen: Generate Video from Google Sheets</h1>", unsafe_allow_html=True)
+st.markdown("---")
+
+
+# ----------------------------
+# 1️⃣ Input Google Sheet URL
+# ----------------------------
 sheet_url = st.text_input(
-    "Enter your Google Sheet URL:",
+    "Enter your Google Sheet URL",
     "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit#gid=0"
 )
 
 if sheet_url:
-    # Extract Sheet ID
     try:
+        # Extract Sheet ID
         parsed = urlparse(sheet_url)
+
         if "/d/" in parsed.path:
             sheet_id = parsed.path.split("/d/")[1].split("/")[0]
         else:
@@ -31,62 +37,119 @@ if sheet_url:
             sheet_id = qs.get("id", [None])[0]
 
         if not sheet_id:
-            st.error("Could not extract Sheet ID. Please check your URL.")
-        else:
-            st.success(f"✅ Extracted Sheet ID: {sheet_id}")
+            st.error("Could not extract Sheet ID. Please check the URL.")
+            st.stop()
 
-            st.info("⚠️ Please share the Google Sheet with the service email below with Edit access:")
-            st.code(os.getenv("SERVICE_EMAIL"))
+        st.success(f"Extracted Sheet ID: {sheet_id}")
+        st.info("⚠️ Share your Google Sheet with the service account email below (Edit access required):")
+        st.code(os.getenv("SERVICE_EMAIL"))
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            col1, col2, col3 = st.columns([1,2,1])
-            with col2:
-                if st.button("Generate Videos", use_container_width=True):
-                    # Setup GenAI
-                    setup_genai()
 
-                    # Read Sheet
-                    df, records = read_sheet(sheet_id=sheet_id, sheet_name="Sheet1", data_range="A1:B11")
-                    st.markdown("<h4 style='text-align: center;'>Preview of your Google Sheet</h4>", unsafe_allow_html=True)
-                    st.dataframe(df.head())
+        st.markdown("<h3 style='text-align: center;'>Step 1: Generate Videos</h3>", unsafe_allow_html=True)
 
-                    # Process each row
-                    for idx, entry in enumerate(records):
-                        title = entry["Title"]
-                        description = entry["Description"]
 
-                        st.markdown(f"<h3 style='text-align: center; color:#4B0082;'>Processing: {title}</h3>", unsafe_allow_html=True)
+        # ----------------------------
+        # 2️⃣ Start Processing
+        # ----------------------------
+        if st.button("Generate Videos", key="gen_videos"):
 
-                        # ===== Script Generation =====
-                        st.markdown("**Step 1: Generating Script...**")
-                        script_bar = st.progress(0)
-                        script = generate_script(title, description)
-                        script_bar.progress(100)
-                        st.success("✅ Script generated!")
-                        narration_text = script["script"]
+            setup_genai()
+            st.info("Fetching sheet data...")
 
-                        # ===== Audio Generation =====
-                        st.markdown("**Step 2: Generating Narration Audio...**")
-                        audio_bar = st.progress(0)
-                        # If generate_narration supports yielding progress
-                        for prog in generate_narration(narration_text, f"narration/narration_{idx}.mp3"):
-                            audio_bar.progress(prog)
-                        audio_bar.progress(100)
-                        st.success("✅ Audio generated!")
-                        audio_path = f"narration/narration_{idx}.mp3"
-                        st.audio(audio_path)
+            df, records_gen = read_sheet(
+                sheet_id=sheet_id,
+                sheet_name="Sheet1",
+                data_range="A1:B11"
+            )
 
-                        # ===== Video Generation =====
-                        st.markdown("**Step 3: Building Video...**")
-                        video_bar = st.progress(0)
-                        video_path = f"output/video_{idx}.mp4"
-                        for stage, prog in build_video(title, narration_text, out_path=video_path):
-                            if stage == "video":
-                                video_bar.progress(prog)
-                        video_bar.progress(100)
-                        st.success(f"✅ Video generated: {video_path}")
-                        st.video(video_path)
-                        st.markdown("---")
+            # Convert generator → list
+            records = list(records_gen)
 
+            st.success("Sheet data fetched successfully!")
+            st.dataframe(df.head())
+
+            # ----------------------------
+            # 3️⃣ Loop through each row
+            # ----------------------------
+            for idx, entry in enumerate(records):
+
+                title = entry["Title"]
+                description = entry["Description"]
+
+                st.markdown(f"<h3 style='color:#4B0082;'>Processing: {title}</h3>", unsafe_allow_html=True)
+
+                # ----------------------------
+                # Step 1: Script Generation
+                # ----------------------------
+                st.markdown("**Generating script...**")
+                script_progress = st.progress(0)
+
+                for i in range(0, 101, 20):
+                    time.sleep(0.1)
+                    script_progress.progress(i)
+
+                script_data = generate_script(title, description)
+                narration_text = script_data.get("script", description)
+
+                st.success("✅ Script generated!")
+
+
+                # ----------------------------
+                # Step 2: Audio Generation
+                # ----------------------------
+                st.markdown("**Generating narration audio...**")
+                audio_progress = st.progress(0)
+
+                for i in range(0, 101, 25):
+                    time.sleep(0.1)
+                    audio_progress.progress(i)
+
+                audio_path = generate_narration(
+                    narration_text,
+                    f"narration/narration_{idx}.mp3"
+                )
+
+                # DEBUG
+                st.write("DEBUG: audio_path type →", str(type(audio_path)))
+
+                if not isinstance(audio_path, str):
+                    st.error(f"❌ generate_narration() returned invalid type: {type(audio_path)}")
+                    st.stop()
+
+                st.success("✅ Audio generated!")
+                st.audio(audio_path)
+
+
+                # ----------------------------
+                # Step 3: Video Generation
+                # ----------------------------
+                st.markdown("**Generating video...**")
+                video_progress = st.progress(0)
+
+                for i in range(0, 101, 20):
+                    time.sleep(0.1)
+                    video_progress.progress(i)
+
+                video_path = build_video(
+                    title=title,
+                    description=narration_text,
+                    out_path=f"output/video_{idx}.mp4",
+                    max_duration=180
+                )
+
+                st.success(f"✅ Video generated: {video_path}")
+                st.video(video_path)
+
+                st.markdown("---")
+
+
+    # ----------------------------
+    # Global Exception Catcher
+    # ----------------------------
     except Exception as e:
-        st.error(f"Error parsing sheet URL or fetching data: {e}")
+        st.error("❌ Error parsing sheet data or generating output!")
+        st.exception(e)
+
+        # Show full traceback text
+        traceback_str = traceback.format_exc()
+        st.text(traceback_str)
