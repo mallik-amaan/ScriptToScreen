@@ -1,0 +1,34 @@
+# Spreadsheet handling
+gspread
+oauth2client
+pandas
+
+# LLM API clients (choose depending on providers you use)
+openai
+anthropic
+google-generativeai
+cohere
+
+# HTTP client for custom API calls
+requests
+
+# PowerPoint generation
+python-pptx
+
+# Audio processing (combine TTS output, adjust)
+pydub
+
+# Video creation (slides + audio → mp4)
+moviepy
+
+# Image handling (thumbnails for slides etc.)
+Pillow
+
+# Environment variables
+python-dotenv
+
+# Optional: if you want async for faster API handling
+aiohttp
+
+# Optional: if using PyJWT for token-based service accounts
+PyJWT
