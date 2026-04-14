@@ -6,7 +6,7 @@ import json
 
 
 def _get_credentials():
-    creds_json = os.getenv("JSON")
+    creds_json =os.getenv("JSON")
     if not creds_json:
         raise ValueError("No JSON credentials found in environment variable 'JSON'")
 
